@@ -15,8 +15,8 @@ import (
 	"github.com/limetext/lime-backend/lib"
 	"github.com/limetext/lime-backend/lib/log"
 	"github.com/limetext/lime-backend/lib/render"
-	"github.com/limetext/lime-backend/lib/util"
 	. "github.com/limetext/text"
+	"github.com/limetext/util"
 )
 
 // A helper glue structure connecting the backend View with the qml code that
@@ -81,9 +81,9 @@ func (fv *frontendView) Region(a int, b int) Region {
 func (fv *frontendView) RegionLines() int {
 	var count int = 0
 	regs := fv.bv.Sel().Regions()
-	if fv.bv.Buffer() != nil {
+	if fv.bv != nil {
 		for _, r := range regs {
-			count += len(fv.bv.Buffer().Lines(r))
+			count += len(fv.bv.Lines(r))
 		}
 	}
 	return count
@@ -105,12 +105,12 @@ func (fv *frontendView) Fix(obj qml.Object) {
 		}
 	})
 
-	if len(fv.FormattedLine) == 0 && fv.bv.Buffer().Size() > 0 {
-		fv.bufferChanged(fv.bv.Buffer(), 0, fv.bv.Buffer().Size())
+	if len(fv.FormattedLine) == 0 && fv.bv.Size() > 0 {
+		fv.bufferChanged(0, fv.bv.Size())
 		return
 	}
 
-	log.Info("Fix: %v  %v  %v", obj, len(fv.FormattedLine), fv.bv.Buffer().Size())
+	log.Info("Fix: %v  %v  %v", obj, len(fv.FormattedLine), fv.bv.Size())
 
 	for i := range fv.FormattedLine {
 		_ = i
@@ -118,7 +118,7 @@ func (fv *frontendView) Fix(obj qml.Object) {
 	}
 }
 
-func (fv *frontendView) bufferChanged(buf Buffer, pos, delta int) {
+func (fv *frontendView) bufferChanged(pos, delta int) {
 	prof := util.Prof.Enter("frontendView.bufferChanged")
 	defer prof.Exit()
 
@@ -129,15 +129,15 @@ func (fv *frontendView) bufferChanged(buf Buffer, pos, delta int) {
 		}
 	}()
 
-	row1, _ := buf.RowCol(pos)
-	row2, _ := buf.RowCol(pos + delta)
+	row1, _ := fv.bv.RowCol(pos)
+	row2, _ := fv.bv.RowCol(pos + delta)
 	if row1 > row2 {
 		row1, row2 = row2, row1
 	}
 
 	if delta > 0 && fv.qv != nil {
 		r1 := row1
-		if add := strings.Count(buf.Substr(Region{pos, pos + delta}), "\n"); add > 0 {
+		if add := strings.Count(fv.bv.Substr(Region{pos, pos + delta}), "\n"); add > 0 {
 			nn := make([]*lineStruct, len(fv.FormattedLine)+add)
 			copy(nn, fv.FormattedLine[:r1])
 			copy(nn[r1+add:], fv.FormattedLine[r1:])
@@ -157,11 +157,11 @@ func (fv *frontendView) bufferChanged(buf Buffer, pos, delta int) {
 }
 
 func (fv *frontendView) Erased(changed_buffer Buffer, region_removed Region, data_removed []rune) {
-	fv.bufferChanged(changed_buffer, region_removed.B, region_removed.A-region_removed.B)
+	fv.bufferChanged(region_removed.B, region_removed.A-region_removed.B)
 }
 
 func (fv *frontendView) Inserted(changed_buffer Buffer, region_inserted Region, data_inserted []rune) {
-	fv.bufferChanged(changed_buffer, region_inserted.A, region_inserted.B-region_inserted.A)
+	fv.bufferChanged(region_inserted.A, region_inserted.B-region_inserted.A)
 }
 
 func (fv *frontendView) onChange(name string) {
@@ -178,7 +178,7 @@ func (fv *frontendView) formatLine(line int) {
 	prof := util.Prof.Enter("frontendView.formatLine")
 	defer prof.Exit()
 	buf := bytes.NewBuffer(nil)
-	vr := fv.bv.Buffer().Line(fv.bv.Buffer().TextPoint(line, 0))
+	vr := fv.bv.Line(fv.bv.TextPoint(line, 0))
 	for line >= len(fv.FormattedLine) {
 		fv.FormattedLine = append(fv.FormattedLine, &lineStruct{})
 		if fv.qv != nil {
@@ -204,22 +204,22 @@ func (fv *frontendView) formatLine(line int) {
 
 	for _, reg := range recipie {
 		if lastEnd != reg.Region.Begin() {
-			fmt.Fprintf(buf, "<span>%s</span>", fv.bv.Buffer().Substr(Region{lastEnd, reg.Region.Begin()}))
-			chunks = append(chunks, lineChunk{Text: fv.bv.Buffer().Substr(Region{lastEnd, reg.Region.Begin()})})
+			fmt.Fprintf(buf, "<span>%s</span>", fv.bv.Substr(Region{lastEnd, reg.Region.Begin()}))
+			chunks = append(chunks, lineChunk{Text: fv.bv.Substr(Region{lastEnd, reg.Region.Begin()})})
 		}
-		fmt.Fprintf(buf, "<span style=\"white-space:pre; color:#%s; background:#%s\">%s</span>", htmlcol(reg.Flavour.Foreground), htmlcol(reg.Flavour.Background), fv.bv.Buffer().Substr(reg.Region))
-		chunks = append(chunks, lineChunk{Text: fv.bv.Buffer().Substr(reg.Region), Foreground: htmlcol(reg.Flavour.Foreground), Background: htmlcol(reg.Flavour.Background)})
+		fmt.Fprintf(buf, "<span style=\"white-space:pre; color:#%s; background:#%s\">%s</span>", htmlcol(reg.Flavour.Foreground), htmlcol(reg.Flavour.Background), fv.bv.Substr(reg.Region))
+		chunks = append(chunks, lineChunk{Text: fv.bv.Substr(reg.Region), Foreground: htmlcol(reg.Flavour.Foreground), Background: htmlcol(reg.Flavour.Background)})
 		lastEnd = reg.Region.End()
 	}
 	if lastEnd != vr.End() {
-		io.WriteString(buf, fv.bv.Buffer().Substr(Region{lastEnd, vr.End()}))
-		chunks = append(chunks, lineChunk{Text: fv.bv.Buffer().Substr(Region{lastEnd, vr.End()})})
+		io.WriteString(buf, fv.bv.Substr(Region{lastEnd, vr.End()}))
+		chunks = append(chunks, lineChunk{Text: fv.bv.Substr(Region{lastEnd, vr.End()})})
 	}
 
 	str := buf.String()
 
 	if fv.FormattedLine[line].Text != str {
-		fv.FormattedLine[line].RawText = fv.bv.Buffer().Substr(vr)
+		fv.FormattedLine[line].RawText = fv.bv.Substr(vr)
 		fv.FormattedLine[line].Text = str
 		fv.FormattedLine[line].Chunks = chunks
 		t.qmlChanged(fv.FormattedLine[line], fv.FormattedLine[line])

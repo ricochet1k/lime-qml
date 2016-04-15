@@ -19,14 +19,13 @@ import (
 	"github.com/limetext/lime-backend/lib/keys"
 	"github.com/limetext/lime-backend/lib/log"
 	"github.com/limetext/lime-backend/lib/render"
-	_ "github.com/limetext/lime-backend/lib/sublime"
-	"github.com/limetext/lime-backend/lib/textmate"
-	"github.com/limetext/lime-backend/lib/util"
+	"github.com/limetext/sublime"
 	. "github.com/limetext/text"
+	"github.com/limetext/util"
 )
 
 var (
-	scheme *textmate.Theme
+	scheme *sublime.Theme
 )
 
 const (
@@ -64,7 +63,7 @@ func (t *qmlfrontend) Show(v *backend.View, r Region) {
 
 func (t *qmlfrontend) VisibleRegion(v *backend.View) Region {
 	// TODO
-	return Region{0, v.Buffer().Size()}
+	return Region{0, v.Size()}
 }
 
 func (t *qmlfrontend) StatusMessage(msg string) {
@@ -148,10 +147,10 @@ func (t *qmlfrontend) DefaultFg() color.RGBA {
 // Called when a new view is opened
 func (t *qmlfrontend) onNew(v *backend.View) {
 	fv := &frontendView{bv: v}
-	v.Buffer().AddObserver(fv)
+	v.AddObserver(fv)
 	v.Settings().AddOnChange("blah", fv.onChange)
 
-	fv.Title.Text = v.Buffer().FileName()
+	fv.Title.Text = v.FileName()
 	if len(fv.Title.Text) == 0 {
 		fv.Title.Text = "untitled"
 	}
@@ -190,7 +189,7 @@ func (t *qmlfrontend) onLoad(v *backend.View) {
 		}
 	}
 	v2 := w2.views[i]
-	v2.Title.Text = v.Buffer().FileName()
+	v2.Title.Text = v.FileName()
 	tabs := w2.window.ObjectByName("tabs")
 	tabs.Set("currentIndex", w2.ActiveViewIndex())
 	tab := tabs.Call("getTab", i).(qml.Object)
@@ -285,12 +284,8 @@ func (t *qmlfrontend) loop() (err error) {
 	ed.LogCommands(false)
 	c := ed.Console()
 	t.Console = &frontendView{bv: c}
-	c.Buffer().AddObserver(t.Console)
-	c.Buffer().AddObserver(t)
-
-	ed.AddPackagesPath("shipped", "../packages")
-	ed.AddPackagesPath("default", "../packages/Default")
-	ed.AddPackagesPath("user", "../packages/User")
+	c.AddObserver(t.Console)
+	c.AddObserver(t)
 
 	var (
 		engine    *qml.Engine
@@ -298,6 +293,8 @@ func (t *qmlfrontend) loop() (err error) {
 		// WaitGroup keeping track of open windows
 		wg sync.WaitGroup
 	)
+
+	ed.Init()
 
 	// create and setup a new engine, destroying
 	// the old one if one exists.
@@ -340,19 +337,24 @@ func (t *qmlfrontend) loop() (err error) {
 	})
 
 	// TODO: should be done backend side
-	if sc, err := textmate.LoadTheme("../packages/TextMate-Themes/Monokai.tmTheme"); err != nil {
+	if sc, err := sublime.LoadTheme("../packages/TextMate-Themes/Monokai.tmTheme"); err != nil {
 		log.Error(err)
 	} else {
 		scheme = sc
 	}
 
-	ed.Init()
+	w := ed.NewWindow()
+
+	w.NewFile()
+
+	ed.AddPackagesPath("shipped", "../packages")
+	ed.AddPackagesPath("default", "../packages/Default")
+	ed.AddPackagesPath("user", "../packages/User")
 
 	// TODO: setting syntax should be done automaticly in backend and after
 	// implementing this we could run Init in a go routine and remove the
 	// next two line
-	v := ed.ActiveWindow().OpenFile("main.go", 0)
-	v.SetSyntaxFile("../packages/go-tmbundle/Syntaxes/Go.tmLanguage")
+	_ = ed.ActiveWindow().OpenFile("main.go", 0)
 
 	defer func() {
 		fmt.Println(util.Prof)

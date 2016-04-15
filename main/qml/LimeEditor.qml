@@ -83,6 +83,9 @@ Item {
               property var line: myView && index > -1 ? myView.line(index) : null
               property var lineText: !line ? null : line.text
 
+              // renderStrategy: Canvas.Immediate
+              // renderTarget: Canvas.FramebufferObject
+
               onLineTextChanged: {
                 requestPaint();
               }
@@ -257,7 +260,7 @@ Item {
 
                 if (item != null && selection != null) {
                     var col = colFromMouseX(index, mouse.x);
-                    point.r = myView.back().buffer().textPoint(index, col);
+                    point.r = myView.back().textPoint(index, col);
                     if (point.p != null && point.p != point.r) {
                         // Remove the last region and replace it with new one
                         var r = selection.get(selection.len()-1);
@@ -279,7 +282,7 @@ Item {
 
                 if (item != null) {
                     var col = colFromMouseX(index, mouse.x);
-                    point.p = myView.back().buffer().textPoint(index, col)
+                    point.p = myView.back().textPoint(index, col)
 
                     if (!ctrl) {
                         selection.clear();
@@ -298,7 +301,7 @@ Item {
 
                 if (item != null) {
                     var col = colFromMouseX(index, mouse.x);
-                    point.p = myView.back().buffer().textPoint(index, col)
+                    point.p = myView.back().textPoint(index, col)
 
                     if (!ctrl) {
                         getCurrentSelection().clear();
@@ -424,7 +427,7 @@ Item {
                 return;
               }
 
-              var buf = myView.back().buffer();
+              var buf = myView.back();
 
               safeSelection = toSafeSelection(selection);
 
@@ -452,8 +455,8 @@ Item {
                   console.log("Skipping paint");
                   return;
                 }
-                var backend = myView.back(),
-                    buf = backend.buffer();
+                var backend = myView.back();
+                var buf = backend;
 
                 var ctx = selCanvas.getContext("2d");
 
